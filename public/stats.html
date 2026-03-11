@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statistics</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <nav>
+        <a href="index.html"><i class="fas fa-home"></i> Home</a>
+        <a href="fighters.html"><i class="fas fa-fighter-jet"></i> Fighters</a>
+        <a href="manufacturers.html"><i class="fas fa-industry"></i> Manufacturers</a>
+        <a href="weapons.html"><i class="fas fa-rocket"></i> Weapons</a>
+        <a href="stats.html"><i class="fas fa-chart-bar"></i> Stats</a>
+        <span id="authLinks"></span>
+        <span id="adminLink" style="display:none;"><a href="create-fighter.html"><i class="fas fa-plus-circle"></i> Add Fighter</a></span>
+    </nav>
+
+    <div class="container">
+        <h1>Statistics</h1>
+
+        <div class="card">
+            <h2>Average Speed by Manufacturer</h2>
+            <div id="avgSpeed"></div>
+            <div id="avgSpeedError" class="error"></div>
+        </div>
+
+        <div class="card">
+            <h2>Count by Type</h2>
+            <div id="countByType"></div>
+            <div id="countByTypeError" class="error"></div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+            async function loadStats() {
+                try {
+                    const res1 = await fetch('/api/fighters/stats/avg-speed-by-manufacturer');
+                    const data1 = await res1.json();
+                    if (data1.success) {
+                        let html = '<ul>';
+                        data1.data.forEach(item => {
+                            html += `<li>${item._id}: ${item.avgSpeed.toFixed(2)} Mach (${item.count} fighters)</li>`;
+                        });
+                        html += '</ul>';
+                        document.getElementById('avgSpeed').innerHTML = html;
+                        document.getElementById('avgSpeedError').innerText = '';
+                    } else {
+                        document.getElementById('avgSpeedError').innerText = data1.error || 'Failed to load';
+                    }
+                } catch (err) {
+                    document.getElementById('avgSpeedError').innerText = 'Network error';
+                }
+
+                try {
+                    const res2 = await fetch('/api/fighters/stats/count-by-type');
+                    const data2 = await res2.json();
+                    if (data2.success) {
+                        let html = '<ul>';
+                        data2.data.forEach(item => {
+                            html += `<li>${item._id}: ${item.count}</li>`;
+                        });
+                        html += '</ul>';
+                        document.getElementById('countByType').innerHTML = html;
+                        document.getElementById('countByTypeError').innerText = '';
+                    } else {
+                        document.getElementById('countByTypeError').innerText = data2.error || 'Failed to load';
+                    }
+                } catch (err) {
+                    document.getElementById('countByTypeError').innerText = 'Network error';
+                }
+            }
+
+            const authLinks = document.getElementById('authLinks');
+            const adminLink = document.getElementById('adminLink');
+            if (token) {
+                authLinks.innerHTML = `<a href="profile.html"><i class="fas fa-user"></i> ${user.username}</a> | <a href="#" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>`;
+                if (user.role === 'admin') {
+                    adminLink.style.display = 'inline';
+                }
+            } else {
+                authLinks.innerHTML = `<a href="login.html"><i class="fas fa-sign-in-alt"></i> Login</a> | <a href="register.html"><i class="fas fa-user-plus"></i> Register</a>`;
+            }
+
+            window.logout = function() {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.href = 'index.html';
+            };
+
+            loadStats();
+        })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manufacturers</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <nav>
+        <a href="index.html"><i class="fas fa-home"></i> Home</a>
+        <a href="fighters.html"><i class="fas fa-fighter-jet"></i> Fighters</a>
+        <a href="manufacturers.html"><i class="fas fa-industry"></i> Manufacturers</a>
+        <a href="weapons.html"><i class="fas fa-rocket"></i> Weapons</a>
+        <a href="stats.html"><i class="fas fa-chart-bar"></i> Stats</a>
+        <span id="authLinks"></span>
+        <span id="adminLink" style="display:none;"><a href="create-fighter.html"><i class="fas fa-plus-circle"></i> Add Fighter</a></span>
+    </nav>
+
+    <div class="container">
+        <h1>Manufacturers</h1>
+
+        <div id="adminAddSection" style="display:none;">
+            <button class="btn" id="toggleAddForm"><i class="fas fa-plus"></i> <span id="toggleText">Add Manufacturer</span></button>
+            <div id="addManufacturerForm" style="display:none; margin-top:1rem;">
+                <div class="card compact-form">
+                    <h3 style="margin-bottom:0.5rem;">Add Manufacturer</h3>
+                    <form id="manuForm">
+                        <div class="form-group">
+                            <label>Name</label>
+                            <input type="text" id="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Country</label>
+                            <select id="country" required>
+                                <option>USA</option><option>Russia</option><option>China</option><option>UK</option><option>France</option><option>Other</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn"><i class="fas fa-save"></i> Add</button>
+                    </form>
+                    <div id="message" style="margin-top:0.5rem;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:1rem;">
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <div class="form-group" style="flex:1; min-width:200px;">
+                    <label>Filter by Country</label>
+                    <select id="countryFilter">
+                        <option value="">All</option>
+                        <option>USA</option><option>Russia</option><option>China</option><option>UK</option><option>France</option><option>Other</option>
+                    </select>
+                </div>
+                <button id="apply" class="btn" style="margin-top:1.2rem;"><i class="fas fa-filter"></i> Apply</button>
+            </div>
+        </div>
+
+        <div id="error" class="error"></div>
+        <div id="manufacturers" class="tile-grid"></div>
+    </div>
+
+    <script>
+        (function() {
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const adminAddSection = document.getElementById('adminAddSection');
+            const toggleAddBtn = document.getElementById('toggleAddForm');
+            const addForm = document.getElementById('addManufacturerForm');
+            const toggleText = document.getElementById('toggleText');
+
+            if (user.role === 'admin') {
+                adminAddSection.style.display = 'block';
+                toggleAddBtn.addEventListener('click', () => {
+                    if (addForm.style.display === 'none' || addForm.classList.contains('hide-form')) {
+                        addForm.classList.remove('hide-form');
+                        addForm.style.display = 'block';
+                        toggleText.innerText = 'Hide Add Manufacturer';
+                    } else {
+                        addForm.classList.add('hide-form');
+                        setTimeout(() => {
+                            addForm.style.display = 'none';
+                            addForm.classList.remove('hide-form');
+                        }, 300);
+                        toggleText.innerText = 'Add Manufacturer';
+                    }
+                });
+            }
+
+            window.copyToClipboard = function(text) {
+                navigator.clipboard.writeText(text).then(() => alert('Copied!'));
+            };
+
+            async function loadManufacturers() {
+                const country = document.getElementById('countryFilter').value;
+                let url = '/api/manufacturers';
+                if (country) url += '?country=' + encodeURIComponent(country);
+
+                try {
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    if (data.success) {
+                        let html = '';
+                        data.data.forEach(m => {
+                            html += `
+                                <div class="tile">
+                                    <div class="tile-title">${m.name}</div>
+                                    <div class="tile-detail"><strong>Country:</strong> ${m.country}</div>
+                                    <div class="tile-actions">
+                                        <button class="btn btn-sm" onclick="copyToClipboard('${m._id}')"><i class="fas fa-copy"></i> Copy ID</button>
+                                        ${user.role === 'admin' ? `<button class="btn btn-delete btn-sm" onclick="deleteManufacturer('${m._id}')"><i class="fas fa-trash-alt"></i> Delete</button>` : ''}
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        document.getElementById('manufacturers').innerHTML = html || '<p class="card">No manufacturers found.</p>';
+                        document.getElementById('error').innerText = '';
+                    } else {
+                        document.getElementById('error').innerText = data.error || 'Failed to load';
+                    }
+                } catch (err) {
+                    document.getElementById('error').innerText = 'Network error.';
+                }
+            }
+
+            window.deleteManufacturer = async function(id) {
+                if (!confirm('Delete this manufacturer?')) return;
+                try {
+                    const res = await fetch('/api/manufacturers/' + id, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        loadManufacturers();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } catch (err) {
+                    alert('Network error');
+                }
+            };
+
+            document.getElementById('manuForm').onsubmit = async (e) => {
+                e.preventDefault();
+                const manu = {
+                    name: document.getElementById('name').value,
+                    country: document.getElementById('country').value
+                };
+                try {
+                    const res = await fetch('/api/manufacturers', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(manu)
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert('✅ Manufacturer added');
+                        document.getElementById('manuForm').reset();
+                        addForm.classList.add('hide-form');
+                        setTimeout(() => {
+                            addForm.style.display = 'none';
+                            addForm.classList.remove('hide-form');
+                            toggleText.innerText = 'Add Manufacturer';
+                        }, 300);
+                        loadManufacturers();
+                    } else {
+                        alert('❌ Error: ' + data.error);
+                    }
+                } catch (err) {
+                    alert('Network error');
+                }
+            };
+
+            document.getElementById('apply').addEventListener('click', loadManufacturers);
+            loadManufacturers();
+
+            const authLinks = document.getElementById('authLinks');
+            const adminLink = document.getElementById('adminLink');
+            if (token) {
+                authLinks.innerHTML = `<a href="profile.html"><i class="fas fa-user"></i> ${user.username}</a> | <a href="#" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>`;
+                if (user.role === 'admin') {
+                    adminLink.style.display = 'inline';
+                }
+            } else {
+                authLinks.innerHTML = `<a href="login.html"><i class="fas fa-sign-in-alt"></i> Login</a> | <a href="register.html"><i class="fas fa-user-plus"></i> Register</a>`;
+            }
+
+            window.logout = function() {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.href = 'index.html';
+            };
+        })();
+    </script>
+</body>
+</html>

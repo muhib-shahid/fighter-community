@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fighters</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <nav>
+        <a href="index.html"><i class="fas fa-home"></i> Home</a>
+        <a href="fighters.html"><i class="fas fa-fighter-jet"></i> Fighters</a>
+        <a href="manufacturers.html"><i class="fas fa-industry"></i> Manufacturers</a>
+        <a href="weapons.html"><i class="fas fa-rocket"></i> Weapons</a>
+        <a href="stats.html"><i class="fas fa-chart-bar"></i> Stats</a>
+        <span id="authLinks"></span>
+        <span id="adminLink" style="display:none;"><a href="create-fighter.html"><i class="fas fa-plus-circle"></i> Add Fighter</a></span>
+    </nav>
+
+    <div class="container">
+        <h1>Fighters</h1>
+
+        <!-- Filter card -->
+        <div class="card" style="margin-top:1rem;">
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+                <div class="form-group" style="flex:1; min-width:180px;">
+                    <label>Filter by Type</label>
+                    <select id="type">
+                        <option value="">All</option>
+                        <option>fighter</option><option>bomber</option><option>multirole</option><option>interceptor</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex:1; min-width:180px;">
+                    <label>Min Speed (Mach)</label>
+                    <input type="number" id="minSpeed" step="0.1">
+                </div>
+                <div class="form-group" style="flex:1; min-width:180px;">
+                    <label>Sort by</label>
+                    <select id="sort">
+                        <option value="-createdAt">Newest</option>
+                        <option value="name">Name A-Z</option>
+                        <option value="-name">Name Z-A</option>
+                        <option value="speed">Speed (low-high)</option>
+                        <option value="-speed">Speed (high-low)</option>
+                    </select>
+                </div>
+                <button id="apply" class="btn" style="margin-top:1.2rem;"><i class="fas fa-filter"></i> Apply</button>
+            </div>
+        </div>
+
+        <div id="error" class="error"></div>
+        <div id="fighters" class="tile-grid"></div>
+    </div>
+
+    <script>
+        (function() {
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+            async function loadFighters() {
+                const type = document.getElementById('type').value;
+                const minSpeed = document.getElementById('minSpeed').value;
+                const sort = document.getElementById('sort').value;
+                let url = '/api/fighters?';
+                const params = [];
+                if (type) params.push('type=' + encodeURIComponent(type));
+                if (minSpeed) params.push('minSpeed=' + minSpeed);
+                if (sort) params.push('sort=' + sort);
+                url += params.join('&');
+
+                try {
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    if (data.success) {
+                        let html = '';
+                        data.data.forEach(f => {
+                            html += `
+                                <div class="tile">
+                                    <div class="tile-title">${f.name}</div>
+                                    <div class="tile-detail"><strong>Type:</strong> <span>${f.type}</span></div>
+                                    <div class="tile-detail"><strong>Speed:</strong> ${f.topSpeed} Mach</div>
+                                    <div class="tile-detail"><strong>Manufacturer:</strong> ${f.manufacturer ? f.manufacturer.name : 'N/A'}</div>
+                                    <div class="tile-actions">
+                                        <a href="fighter-detail.html?id=${f._id}" class="btn btn-delete btn-sm"><i class="fas fa-eye"></i> View</a>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        document.getElementById('fighters').innerHTML = html || '<p class="card">No fighters found.</p>';
+                        document.getElementById('error').innerText = '';
+                    } else {
+                        document.getElementById('error').innerText = data.error || 'Failed to load';
+                    }
+                } catch (err) {
+                    document.getElementById('error').innerText = 'Network error. Please try again.';
+                }
+            }
+
+            document.getElementById('apply').addEventListener('click', loadFighters);
+            loadFighters();
+
+            const authLinks = document.getElementById('authLinks');
+            const adminLink = document.getElementById('adminLink');
+            if (token) {
+                authLinks.innerHTML = `<a href="profile.html"><i class="fas fa-user"></i> ${user.username}</a> | <a href="#" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>`;
+                if (user.role === 'admin') {
+                    adminLink.style.display = 'inline';
+                }
+            } else {
+                authLinks.innerHTML = `<a href="login.html"><i class="fas fa-sign-in-alt"></i> Login</a> | <a href="register.html"><i class="fas fa-user-plus"></i> Register</a>`;
+            }
+
+            window.logout = function() {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.href = 'index.html';
+            };
+        })();
+    </script>
+</body>
+</html>

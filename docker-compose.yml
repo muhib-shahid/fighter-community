@@ -1,0 +1,28 @@
+services:
+  mongodb:
+    image: mongo:6
+    container_name: fighter-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  app:
+    build: .
+    container_name: fighter-api
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/fighterdb
+      - JWT_SECRET=2a9eb3c89a1a0a449149b8856f88b3da668917071233abc148df0b6ffbf8ccb71d07852c485230114cbea36352c00c8d20a160567e2b1b0e1ebb1bdbf174c2a8
+      - JWT_EXPIRE=7d
+    depends_on:
+      - mongodb
+    volumes:
+      - ./:/app
+      - /app/node_modules
+
+volumes:
+  mongo-data:

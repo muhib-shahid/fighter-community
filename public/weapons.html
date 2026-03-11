@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weapons</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <nav>
+        <a href="index.html"><i class="fas fa-home"></i> Home</a>
+        <a href="fighters.html"><i class="fas fa-fighter-jet"></i> Fighters</a>
+        <a href="manufacturers.html"><i class="fas fa-industry"></i> Manufacturers</a>
+        <a href="weapons.html"><i class="fas fa-rocket"></i> Weapons</a>
+        <a href="stats.html"><i class="fas fa-chart-bar"></i> Stats</a>
+        <span id="authLinks"></span>
+        <span id="adminLink" style="display:none;"><a href="create-fighter.html"><i class="fas fa-plus-circle"></i> Add Fighter</a></span>
+    </nav>
+
+    <div class="container">
+        <h1>Weapons</h1>
+
+        <div id="adminAddSection" style="display:none;">
+            <button class="btn" id="toggleAddForm"><i class="fas fa-plus"></i> <span id="toggleText">Add Weapon</span></button>
+            <div id="addWeaponForm" style="display:none; margin-top:1rem;">
+                <div class="card compact-form">
+                    <h3 style="margin-bottom:0.5rem;">Add Weapon</h3>
+                    <form id="weaponForm">
+                        <div class="form-group">
+                            <label>Name</label>
+                            <input type="text" id="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select id="type" required>
+                                <option>air-to-air</option><option>air-to-ground</option><option>multi-role</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Range (km)</label>
+                            <input type="number" id="range" min="0" required>
+                        </div>
+                        <button type="submit" class="btn"><i class="fas fa-save"></i> Add</button>
+                    </form>
+                    <div id="message" style="margin-top:0.5rem;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:1rem;">
+            <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                <div class="form-group" style="flex:1; min-width:150px;">
+                    <label>Filter by Type</label>
+                    <select id="typeFilter">
+                        <option value="">All</option>
+                        <option>air-to-air</option><option>air-to-ground</option><option>multi-role</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex:1; min-width:150px;">
+                    <label>Min Range</label>
+                    <input type="number" id="minRange">
+                </div>
+                <div class="form-group" style="flex:1; min-width:150px;">
+                    <label>Max Range</label>
+                    <input type="number" id="maxRange">
+                </div>
+                <button id="apply" class="btn" style="margin-top:1.2rem;"><i class="fas fa-filter"></i> Apply</button>
+            </div>
+        </div>
+
+        <div id="error" class="error"></div>
+        <div id="weapons" class="tile-grid"></div>
+    </div>
+
+    <script>
+        (function() {
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const adminAddSection = document.getElementById('adminAddSection');
+            const toggleAddBtn = document.getElementById('toggleAddForm');
+            const addForm = document.getElementById('addWeaponForm');
+            const toggleText = document.getElementById('toggleText');
+
+            if (user.role === 'admin') {
+                adminAddSection.style.display = 'block';
+                toggleAddBtn.addEventListener('click', () => {
+                    if (addForm.style.display === 'none' || addForm.classList.contains('hide-form')) {
+                        addForm.classList.remove('hide-form');
+                        addForm.style.display = 'block';
+                        toggleText.innerText = 'Hide Add Weapon';
+                    } else {
+                        addForm.classList.add('hide-form');
+                        setTimeout(() => {
+                            addForm.style.display = 'none';
+                            addForm.classList.remove('hide-form');
+                        }, 300);
+                        toggleText.innerText = 'Add Weapon';
+                    }
+                });
+            }
+
+            window.copyToClipboard = function(text) {
+                navigator.clipboard.writeText(text).then(() => alert('Copied!'));
+            };
+
+            async function loadWeapons() {
+                const type = document.getElementById('typeFilter').value;
+                const minRange = document.getElementById('minRange').value;
+                const maxRange = document.getElementById('maxRange').value;
+                let url = '/api/weapons?';
+                const params = [];
+                if (type) params.push('type=' + encodeURIComponent(type));
+                if (minRange) params.push('minRange=' + minRange);
+                if (maxRange) params.push('maxRange=' + maxRange);
+                url += params.join('&');
+
+                try {
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    if (data.success) {
+                        let html = '';
+                        data.data.forEach(w => {
+                            html += `
+                                <div class="tile">
+                                    <div class="tile-title">${w.name}</div>
+                                    <div class="tile-detail"><strong>Type:</strong> ${w.type}</div>
+                                    <div class="tile-detail"><strong>Range:</strong> ${w.range} km</div>
+                                    <div class="tile-actions">
+                                        <button class="btn btn-sm" onclick="copyToClipboard('${w._id}')"><i class="fas fa-copy"></i> Copy ID</button>
+                                        ${user.role === 'admin' ? `<button class="btn btn-delete btn-sm" onclick="deleteWeapon('${w._id}')"><i class="fas fa-trash-alt"></i> Delete</button>` : ''}
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        document.getElementById('weapons').innerHTML = html || '<p class="card">No weapons found.</p>';
+                        document.getElementById('error').innerText = '';
+                    } else {
+                        document.getElementById('error').innerText = data.error || 'Failed to load';
+                    }
+                } catch (err) {
+                    document.getElementById('error').innerText = 'Network error.';
+                }
+            }
+
+            window.deleteWeapon = async function(id) {
+                if (!confirm('Delete this weapon?')) return;
+                try {
+                    const res = await fetch('/api/weapons/' + id, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        loadWeapons();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } catch (err) {
+                    alert('Network error');
+                }
+            };
+
+            document.getElementById('weaponForm').onsubmit = async (e) => {
+                e.preventDefault();
+                const weapon = {
+                    name: document.getElementById('name').value,
+                    type: document.getElementById('type').value,
+                    range: parseInt(document.getElementById('range').value)
+                };
+                try {
+                    const res = await fetch('/api/weapons', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(weapon)
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert('✅ Weapon added');
+                        document.getElementById('weaponForm').reset();
+                        addForm.classList.add('hide-form');
+                        setTimeout(() => {
+                            addForm.style.display = 'none';
+                            addForm.classList.remove('hide-form');
+                            toggleText.innerText = 'Add Weapon';
+                        }, 300);
+                        loadWeapons();
+                    } else {
+                        alert('❌ Error: ' + data.error);
+                    }
+                } catch (err) {
+                    alert('Network error');
+                }
+            };
+
+            document.getElementById('apply').addEventListener('click', loadWeapons);
+            loadWeapons();
+
+            const authLinks = document.getElementById('authLinks');
+            const adminLink = document.getElementById('adminLink');
+            if (token) {
+                authLinks.innerHTML = `<a href="profile.html"><i class="fas fa-user"></i> ${user.username}</a> | <a href="#" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>`;
+                if (user.role === 'admin') {
+                    adminLink.style.display = 'inline';
+                }
+            } else {
+                authLinks.innerHTML = `<a href="login.html"><i class="fas fa-sign-in-alt"></i> Login</a> | <a href="register.html"><i class="fas fa-user-plus"></i> Register</a>`;
+            }
+
+            window.logout = function() {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.href = 'index.html';
+            };
+        })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fighter Detail</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <nav>
+        <a href="index.html"><i class="fas fa-home"></i> Home</a>
+        <a href="fighters.html"><i class="fas fa-fighter-jet"></i> Fighters</a>
+        <a href="manufacturers.html"><i class="fas fa-industry"></i> Manufacturers</a>
+        <a href="weapons.html"><i class="fas fa-rocket"></i> Weapons</a>
+        <a href="stats.html"><i class="fas fa-chart-bar"></i> Stats</a>
+        <span id="authLinks"></span>
+        <span id="adminLink" style="display:none;"><a href="create-fighter.html"><i class="fas fa-plus-circle"></i> Add Fighter</a></span>
+    </nav>
+
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h1 id="fighterName"></h1>
+            <div style="display: flex; gap: 0.5rem;">
+                <!-- Hangar button (visible when logged in) -->
+                <div id="hangarButtonContainer" style="display: none;">
+                    <button class="btn btn-delete" id="toggleHangarForm"><i class="fas fa-plus-circle"></i> Add to Hangar</button>
+                </div>
+                <!-- Admin controls (visible for admin) -->
+                <div id="adminControls" style="display: none;">
+                    <button class="btn" onclick="editFighter()"><i class="fas fa-edit"></i> Edit</button>
+                    <button class="btn btn-delete" onclick="deleteFighter()"><i class="fas fa-trash-alt"></i> Delete</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add to Hangar form (initially hidden) -->
+        <div id="addToHangarForm" style="display:none; margin-top:1rem;">
+            <div class="card compact-form">
+                <h3>Add to Hangar</h3>
+                <form id="hangarForm">
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select id="hangarStatus">
+                            <option value="want">Want</option>
+                            <option value="owned">Owned</option>
+                            <option value="flown">Flown</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Notes (optional)</label>
+                        <input type="text" id="hangarNotes" placeholder="e.g., my favorite">
+                    </div>
+                    <button type="submit" class="btn"><i class="fas fa-save"></i> Add</button>
+                </form>
+                <div id="hangarMessage" style="margin-top:0.5rem;"></div>
+            </div>
+        </div>
+
+        <div id="error" class="error"></div>
+
+        <div class="fighter-detail-grid">
+            <!-- Left column: Specifications -->
+            <div class="specs-column">
+                <div class="card">
+                    <h2>Specifications</h2>
+                    <div id="details" class="specs-grid"></div>
+                    <div id="weapons" class="weapons-list"></div>
+                </div>
+            </div>
+
+            <!-- Right column: Reviews -->
+            <div class="reviews-column">
+                <div class="card">
+                    <h2>Reviews</h2>
+                    <div id="reviewForm" style="display:none;">
+                        <h3>Write a Review</h3>
+                        <form id="newReviewForm">
+                            <div class="form-group">
+                                <label>Rating (1-5)</label>
+                                <input type="number" id="rating" min="1" max="5" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Title</label>
+                                <input type="text" id="reviewTitle" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Comment</label>
+                                <textarea id="reviewComment" rows="2" required></textarea>
+                            </div>
+                            <button type="submit" class="btn"><i class="fas fa-paper-plane"></i> Submit</button>
+                        </form>
+                    </div>
+                    <div id="reviewsList"></div>
+                </div>
+            </div>
+
+            <!-- Full width: Comments -->
+            <div class="comments-full">
+                <div class="card">
+                    <h2>Comments</h2>
+                    <div id="commentForm" style="display:none;">
+                        <h3>Leave a Comment</h3>
+                        <form id="newCommentForm">
+                            <div class="form-group">
+                                <textarea id="commentText" rows="2" required></textarea>
+                            </div>
+                            <button type="submit" class="btn"><i class="fas fa-comment"></i> Post</button>
+                        </form>
+                    </div>
+                    <div id="commentsList"></div>
+                </div>
+            </div>
+        </div>
+
+        <a href="fighters.html" class="btn" style="margin-top:1rem;"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+
+    <script>
+        (function() {
+            const API = '/api';
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const urlParams = new URLSearchParams(window.location.search);
+            const fighterId = urlParams.get('id');
+
+            if (!fighterId) {
+                document.getElementById('error').innerText = 'No fighter ID provided.';
+                return;
+            }
+
+            function handleUnauthorized() {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.href = 'login.html';
+            }
+
+            async function fetchWithAuth(url, options = {}) {
+                if (!options.headers) options.headers = {};
+                options.headers['Authorization'] = `Bearer ${token}`;
+                const res = await fetch(url, options);
+                if (res.status === 401) {
+                    handleUnauthorized();
+                    throw new Error('Unauthorized');
+                }
+                return res;
+            }
+
+            async function loadFighter() {
+                try {
+                    const res = await fetch(`${API}/fighters/${fighterId}`);
+                    const data = await res.json();
+                    if (data.success) {
+                        const f = data.data;
+                        document.getElementById('fighterName').textContent = f.name;
+
+                        const specs = [
+                            { label: 'Type', value: f.type },
+                            { label: 'Manufacturer', value: f.manufacturer ? f.manufacturer.name : 'N/A' },
+                            { label: 'Top Speed', value: f.topSpeed + ' Mach' },
+                            { label: 'Maneuverability', value: f.maneuverability },
+                            { label: 'Stability', value: f.stability + '/10' },
+                            { label: 'Defense', value: f.defense },
+                            { label: 'Air-to-Air', value: f.airToAirCapability },
+                            { label: 'Air-to-Ground', value: f.airToGroundCapability }
+                        ];
+                        let specsHtml = '';
+                        specs.forEach(s => {
+                            specsHtml += `
+                                <div class="spec-item">
+                                    <strong>${s.label}</strong>
+                                    <span>${s.value}</span>
+                                </div>
+                            `;
+                        });
+                        document.getElementById('details').innerHTML = specsHtml;
+
+                        let weaponsHtml = '';
+                        if (f.weapons && f.weapons.length) {
+                            weaponsHtml = '<strong>Weapons:</strong> <ul>';
+                            f.weapons.forEach(w => {
+                                weaponsHtml += `<li>${w.name} (${w.type}, ${w.range} km)</li>`;
+                            });
+                            weaponsHtml += '</ul>';
+                        } else {
+                            weaponsHtml = '<p>No weapons</p>';
+                        }
+                        document.getElementById('weapons').innerHTML = weaponsHtml;
+
+                        if (user.role === 'admin') {
+                            document.getElementById('adminControls').style.display = 'flex';
+                        }
+                        if (token) {
+                            document.getElementById('reviewForm').style.display = 'block';
+                            document.getElementById('commentForm').style.display = 'block';
+                            document.getElementById('hangarButtonContainer').style.display = 'block';
+                        }
+                    } else {
+                        document.getElementById('error').innerText = data.error || 'Failed to load fighter';
+                    }
+                } catch (err) {
+                    document.getElementById('error').innerText = 'Network error. Please try again.';
+                }
+            }
+
+            window.editFighter = function() {
+                window.location.href = `edit-fighter.html?id=${fighterId}`;
+            };
+
+            window.deleteFighter = async function() {
+                if (!confirm('Delete this fighter permanently?')) return;
+                try {
+                    const res = await fetchWithAuth(`${API}/fighters/${fighterId}`, { method: 'DELETE' });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert('Fighter deleted');
+                        window.location.href = 'fighters.html';
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } catch (err) {
+                    if (err.message !== 'Unauthorized') alert('Network error');
+                }
+            };
+
+            // Hangar functionality
+            const toggleHangarBtn = document.getElementById('toggleHangarForm');
+            const hangarFormDiv = document.getElementById('addToHangarForm');
+            const hangarForm = document.getElementById('hangarForm');
+            const hangarMessage = document.getElementById('hangarMessage');
+
+            if (toggleHangarBtn) {
+                toggleHangarBtn.addEventListener('click', () => {
+                    if (hangarFormDiv.style.display === 'none' || hangarFormDiv.classList.contains('hide-form')) {
+                        hangarFormDiv.classList.remove('hide-form');
+                        hangarFormDiv.style.display = 'block';
+                        toggleHangarBtn.innerHTML = '<i class="fas fa-minus-circle"></i> Hide Form';
+                    } else {
+                        hangarFormDiv.classList.add('hide-form');
+                        setTimeout(() => {
+                            hangarFormDiv.style.display = 'none';
+                            hangarFormDiv.classList.remove('hide-form');
+                            toggleHangarBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Add to Hangar';
+                        }, 300);
+                    }
+                });
+            }
+
+            if (hangarForm) {
+                hangarForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const status = document.getElementById('hangarStatus').value;
+                    const notes = document.getElementById('hangarNotes').value;
+
+                    try {
+                        const res = await fetchWithAuth('/api/users/hangar', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ fighterId, status, notes })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            hangarMessage.innerHTML = '<span style="color: #10b981;">✅ Added to hangar!</span>';
+                            setTimeout(() => { hangarMessage.innerHTML = ''; }, 3000);
+                            hangarFormDiv.classList.add('hide-form');
+                            setTimeout(() => {
+                                hangarFormDiv.style.display = 'none';
+                                hangarFormDiv.classList.remove('hide-form');
+                                toggleHangarBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Add to Hangar';
+                            }, 300);
+                            hangarForm.reset();
+                        } else {
+                            hangarMessage.innerHTML = `<span style="color: #f87171;">❌ Error: ${data.error}</span>`;
+                        }
+                    } catch (err) {
+                        hangarMessage.innerHTML = '<span style="color: #f87171;">❌ Network error</span>';
+                    }
+                });
+            }
+
+            // Reviews
+            async function loadReviews() {
+                try {
+                    const res = await fetch(`${API}/reviews?fighter=${fighterId}`);
+                    const data = await res.json();
+                    if (data.success) {
+                        let html = '';
+                        data.data.forEach(r => {
+                            html += `
+                                <div class="review-card">
+                                    <div class="review-header">
+                                        <span class="review-author">${r.user.username}</span>
+                                        <span class="review-rating">${r.rating}/5 ★</span>
+                                    </div>
+                                    <div class="review-title">${r.title}</div>
+                                    <div class="review-text">${r.comment}</div>
+                                    <div class="review-meta">${new Date(r.createdAt).toLocaleString()}</div>
+                                    ${(user.id === r.user._id || user.role === 'admin') ? `<button class="btn btn-delete btn-sm" onclick="deleteReview('${r._id}')"><i class="fas fa-trash-alt"></i> Delete</button>` : ''}
+                                </div>
+                            `;
+                        });
+                        document.getElementById('reviewsList').innerHTML = html || '<p>No reviews yet.</p>';
+                    }
+                } catch (err) {
+                    document.getElementById('error').innerText = 'Error loading reviews';
+                }
+            }
+
+            window.deleteReview = async function(reviewId) {
+                if (!confirm('Delete this review?')) return;
+                try {
+                    const res = await fetchWithAuth(`${API}/reviews/${reviewId}`, { method: 'DELETE' });
+                    const data = await res.json();
+                    if (data.success) {
+                        loadReviews();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } catch (err) {
+                    if (err.message !== 'Unauthorized') alert('Network error');
+                }
+            };
+
+            document.getElementById('newReviewForm').onsubmit = async (e) => {
+                e.preventDefault();
+                const rating = document.getElementById('rating').value;
+                const title = document.getElementById('reviewTitle').value;
+                const comment = document.getElementById('reviewComment').value;
+                try {
+                    const res = await fetchWithAuth(`${API}/reviews`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ fighter: fighterId, rating, title, comment })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert('Review posted');
+                        document.getElementById('newReviewForm').reset();
+                        loadReviews();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } catch (err) {
+                    if (err.message !== 'Unauthorized') alert('Network error');
+                }
+            };
+
+            async function loadComments() {
+                try {
+                    const res = await fetch(`${API}/comments?fighter=${fighterId}`);
+                    const data = await res.json();
+                    if (data.success) {
+                        let html = '';
+                        for (const c of data.data) {
+                            html += await renderComment(c);
+                        }
+                        document.getElementById('commentsList').innerHTML = html || '<p>No comments yet.</p>';
+                    }
+                } catch (err) {
+                    document.getElementById('error').innerText = 'Error loading comments';
+                }
+            }
+
+            async function renderComment(comment) {
+                let html = `<div class="comment-card" id="comment-${comment._id}">
+                    <div class="comment-header">
+                        <span class="comment-author">${comment.user.username}</span>
+                        <span class="comment-meta">${new Date(comment.createdAt).toLocaleString()}</span>
+                    </div>
+                    <div class="comment-text">${comment.text}</div>
+                    ${(user.id === comment.user._id || user.role === 'admin') ? 
+                        `<button class="btn btn-delete btn-sm" onclick="deleteComment('${comment._id}')"><i class="fas fa-trash-alt"></i> Delete</button>` : ''}
+                    ${token ? `<button class="btn btn-sm" onclick="showReplyForm('${comment._id}')"><i class="fas fa-reply"></i> Reply</button>` : ''}
+                    <div class="replies" id="replies-${comment._id}"></div>
+                </div>`;
+                try {
+                    const res = await fetch(`${API}/comments/${comment._id}/replies`);
+                    const data = await res.json();
+                    if (data.success && data.data.length) {
+                        let repliesHtml = '';
+                        for (const r of data.data) {
+                            repliesHtml += await renderComment(r);
+                        }
+                        setTimeout(() => {
+                            document.getElementById(`replies-${comment._id}`).innerHTML = repliesHtml;
+                        }, 0);
+                    }
+                } catch (err) {}
+                return html;
+            }
+
+            window.showReplyForm = function(parentId) {
+                const replyDiv = document.createElement('div');
+                replyDiv.className = 'reply-form';
+                replyDiv.innerHTML = `
+                    <form onsubmit="postReply(event, '${parentId}')">
+                        <textarea id="replyText-${parentId}" rows="2" required></textarea>
+                        <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-paper-plane"></i> Post</button>
+                    </form>
+                `;
+                document.getElementById(`comment-${parentId}`).appendChild(replyDiv);
+            };
+
+            window.postReply = async function(event, parentId) {
+                event.preventDefault();
+                const text = document.getElementById(`replyText-${parentId}`).value;
+                try {
+                    const res = await fetchWithAuth(`${API}/comments`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ fighter: fighterId, parentComment: parentId, text })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert('Reply posted');
+                        loadComments();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } catch (err) {
+                    if (err.message !== 'Unauthorized') alert('Network error');
+                }
+            };
+
+            window.deleteComment = async function(commentId) {
+                if (!confirm('Delete this comment?')) return;
+                try {
+                    const res = await fetchWithAuth(`${API}/comments/${commentId}`, { method: 'DELETE' });
+                    const data = await res.json();
+                    if (data.success) {
+                        loadComments();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } catch (err) {
+                    if (err.message !== 'Unauthorized') alert('Network error');
+                }
+            };
+
+            document.getElementById('newCommentForm').onsubmit = async (e) => {
+                e.preventDefault();
+                const text = document.getElementById('commentText').value;
+                try {
+                    const res = await fetchWithAuth(`${API}/comments`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ fighter: fighterId, text })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert('Comment posted');
+                        document.getElementById('commentText').value = '';
+                        loadComments();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } catch (err) {
+                    if (err.message !== 'Unauthorized') alert('Network error');
+                }
+            };
+
+            const authLinks = document.getElementById('authLinks');
+            const adminLink = document.getElementById('adminLink');
+            if (token) {
+                authLinks.innerHTML = `<a href="profile.html"><i class="fas fa-user"></i> ${user.username}</a> | <a href="#" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>`;
+                if (user.role === 'admin') {
+                    adminLink.style.display = 'inline';
+                }
+            } else {
+                authLinks.innerHTML = `<a href="login.html"><i class="fas fa-sign-in-alt"></i> Login</a> | <a href="register.html"><i class="fas fa-user-plus"></i> Register</a>`;
+            }
+
+            window.logout = function() {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.href = 'index.html';
+            };
+
+            loadFighter();
+            loadReviews();
+            loadComments();
+        })();
+    </script>
+</body>
+</html>

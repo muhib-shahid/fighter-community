@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Fighter</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <nav>
+        <a href="index.html"><i class="fas fa-home"></i> Home</a>
+        <a href="fighters.html"><i class="fas fa-fighter-jet"></i> Fighters</a>
+        <a href="manufacturers.html"><i class="fas fa-industry"></i> Manufacturers</a>
+        <a href="weapons.html"><i class="fas fa-rocket"></i> Weapons</a>
+        <a href="stats.html"><i class="fas fa-chart-bar"></i> Stats</a>
+        <span id="authLinks"></span>
+        <span id="adminLink" style="display:none;"><a href="create-fighter.html"><i class="fas fa-plus-circle"></i> Add Fighter</a></span>
+    </nav>
+
+    <div class="container">
+        <h1>Create New Fighter</h1>
+        <div class="card">
+            <form id="fighterForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" id="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Type</label>
+                        <select id="type" required>
+                            <option>fighter</option><option>bomber</option><option>multirole</option><option>interceptor</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Manufacturer ID</label>
+                        <input type="text" id="manufacturer" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Top Speed (Mach)</label>
+                        <input type="number" step="0.1" id="topSpeed" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Maneuverability</label>
+                        <select id="maneuverability">
+                            <option>low</option><option>medium</option><option>high</option><option>extremely high</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Stability (1-10)</label>
+                        <input type="number" id="stability" min="1" max="10" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Defense</label>
+                        <input type="text" id="defense" value="none">
+                    </div>
+                    <div class="form-group">
+                        <label>Air-to-Air</label>
+                        <select id="airToAirCapability" required>
+                            <option>poor</option><option>fair</option><option>good</option><option>excellent</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Air-to-Ground</label>
+                        <select id="airToGroundCapability" required>
+                            <option>poor</option><option>fair</option><option>good</option><option>excellent</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="grid-column: span 2;">
+                        <label>Weapon IDs (comma‑separated)</label>
+                        <input type="text" id="weapons" placeholder="e.g., id1,id2">
+                    </div>
+                </div>
+                <button type="submit" class="btn"><i class="fas fa-save"></i> Create Fighter</button>
+            </form>
+            <div id="message" style="margin-top:1rem;"></div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            if (!token || user.role !== 'admin') {
+                window.location.href = 'fighters.html';
+            }
+
+            document.getElementById('fighterForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const weapons = document.getElementById('weapons').value
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0);
+
+                const fighter = {
+                    name: document.getElementById('name').value,
+                    type: document.getElementById('type').value,
+                    manufacturer: document.getElementById('manufacturer').value,
+                    topSpeed: parseFloat(document.getElementById('topSpeed').value),
+                    maneuverability: document.getElementById('maneuverability').value,
+                    stability: parseInt(document.getElementById('stability').value),
+                    defense: document.getElementById('defense').value,
+                    airToAirCapability: document.getElementById('airToAirCapability').value,
+                    airToGroundCapability: document.getElementById('airToGroundCapability').value,
+                    weapons
+                };
+
+                try {
+                    const res = await fetch('/api/fighters', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(fighter)
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        document.getElementById('message').innerHTML = `✅ Fighter created! <a href="fighter-detail.html?id=${data.data._id}">View</a>`;
+                        document.getElementById('fighterForm').reset();
+                    } else {
+                        document.getElementById('message').innerText = '❌ Error: ' + data.error;
+                    }
+                } catch (err) {
+                    document.getElementById('message').innerText = '❌ Network error.';
+                }
+            });
+
+            const authLinks = document.getElementById('authLinks');
+            const adminLink = document.getElementById('adminLink');
+            if (token) {
+                authLinks.innerHTML = `<a href="profile.html"><i class="fas fa-user"></i> ${user.username}</a> | <a href="#" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>`;
+                if (user.role === 'admin') {
+                    adminLink.style.display = 'inline';
+                }
+            } else {
+                authLinks.innerHTML = `<a href="login.html"><i class="fas fa-sign-in-alt"></i> Login</a> | <a href="register.html"><i class="fas fa-user-plus"></i> Register</a>`;
+            }
+
+            window.logout = function() {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.href = 'index.html';
+            };
+        })();
+    </script>
+</body>
+</html>

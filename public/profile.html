@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <nav>
+        <a href="index.html"><i class="fas fa-home"></i> Home</a>
+        <a href="fighters.html"><i class="fas fa-fighter-jet"></i> Fighters</a>
+        <a href="manufacturers.html"><i class="fas fa-industry"></i> Manufacturers</a>
+        <a href="weapons.html"><i class="fas fa-rocket"></i> Weapons</a>
+        <a href="stats.html"><i class="fas fa-chart-bar"></i> Stats</a>
+        <span id="authLinks"></span>
+        <span id="adminLink" style="display:none;"><a href="create-fighter.html"><i class="fas fa-plus-circle"></i> Add Fighter</a></span>
+    </nav>
+
+    <div class="container">
+        <h1>My Profile</h1>
+
+        <div class="card">
+            <div id="error" class="error"></div>
+            <div id="profile"></div>
+        </div>
+
+        <div class="card">
+            <h2>My Hangar</h2>
+            <div id="hangar"></div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+            if (!token) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            async function loadProfile() {
+                try {
+                    const res = await fetch('/api/users/profile', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (res.status === 401) {
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('user');
+                        window.location.href = 'login.html';
+                        return;
+                    }
+                    const data = await res.json();
+                    if (data.success) {
+                        const userData = data.data.user;
+                        document.getElementById('profile').innerHTML = `
+                            <p><strong>Username:</strong> ${userData.username}</p>
+                            <p><strong>Email:</strong> ${userData.email}</p>
+                            <p><strong>Role:</strong> ${userData.role}</p>
+                        `;
+                        const hangar = data.data.hangar;
+                        let html = '<div class="tile-grid">';
+                        hangar.forEach(item => {
+                            html += `
+                                <div class="tile">
+                                    <div class="tile-title">${item.fighter.name}</div>
+                                    <div class="tile-detail"><strong>Type:</strong> ${item.fighter.type}</div>
+                                    <div class="tile-detail"><strong>Status:</strong> ${item.status}</div>
+                                    ${item.notes ? `<div class="tile-detail"><strong>Notes:</strong> ${item.notes}</div>` : ''}
+                                    <div class="tile-actions">
+                                        <button class="btn btn-delete btn-sm" onclick="removeFromHangar('${item._id}')"><i class="fas fa-trash-alt"></i> Remove</button>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        html += '</div>';
+                        document.getElementById('hangar').innerHTML = html;
+                    } else {
+                        document.getElementById('error').innerText = data.error || 'Failed to load profile';
+                    }
+                } catch (err) {
+                    document.getElementById('error').innerText = 'Network error. Please try again.';
+                }
+            }
+
+            async function removeFromHangar(id) {
+                try {
+                    const res = await fetch(`/api/users/hangar/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (res.status === 401) {
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('user');
+                        window.location.href = 'login.html';
+                        return;
+                    }
+                    if (res.ok) {
+                        loadProfile();
+                    } else {
+                        const data = await res.json();
+                        alert('Error: ' + (data.error || 'Unknown error'));
+                    }
+                } catch (err) {
+                    alert('Network error');
+                }
+            }
+
+            window.removeFromHangar = removeFromHangar;
+
+            const authLinks = document.getElementById('authLinks');
+            const adminLink = document.getElementById('adminLink');
+            if (token) {
+                authLinks.innerHTML = `<a href="profile.html"><i class="fas fa-user"></i> ${user.username}</a> | <a href="#" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>`;
+                if (user.role === 'admin') {
+                    adminLink.style.display = 'inline';
+                }
+            } else {
+                authLinks.innerHTML = `<a href="login.html"><i class="fas fa-sign-in-alt"></i> Login</a> | <a href="register.html"><i class="fas fa-user-plus"></i> Register</a>`;
+            }
+
+            window.logout = function() {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.href = 'index.html';
+            };
+
+            loadProfile();
+        })();
+    </script>
+</body>
+</html>
